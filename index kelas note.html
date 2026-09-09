@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catatan Uang Kas & Piket Kelas</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #050b07; /* Latar belakang hijau gelap */
+            color: #e0e0e0;
+            padding: 20px;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Canvas dipasang fixed memenuhi seluruh layar */
+        #meteorCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: 20px auto;
+            background: rgba(12, 24, 17, 0.85); /* Efek kaca transparan */
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(46, 204, 113, 0.3);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 0 25px rgba(46, 204, 113, 0.2);
+        }
+
+        h2 {
+            text-align: center;
+            color: #2ecc71;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #a8e6cf;
+        }
+
+        input, select, button {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid rgba(46, 204, 113, 0.4);
+            background-color: rgba(5, 15, 10, 0.8);
+            color: #ffffff;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #2ecc71;
+            box-shadow: 0 0 8px rgba(46, 204, 113, 0.6);
+        }
+
+        button {
+            background-color: #2ecc71;
+            color: #05150a;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: 0.3s;
+        }
+
+        button:hover {
+            background-color: #27ae60;
+            box-shadow: 0 0 12px rgba(46, 204, 113, 0.8);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 25px;
+        }
+
+        th, td {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            text-align: left;
+        }
+
+        th {
+            background-color: rgba(46, 204, 113, 0.15);
+            color: #2ecc71;
+        }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .badge-kas {
+            background-color: #d35400;
+        }
+
+        .badge-piket {
+            background-color: #c0392b;
+        }
+
+        .btn-delete {
+            background-color: #2ecc71;
+            color: #05150a;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: auto;
+            font-weight: bold;
+        }
+
+        .btn-delete:hover {
+            background-color: #27ae60;
+        }
+
+        .empty-msg {
+            text-align: center;
+            color: #888;
+            font-style: italic;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Canvas Background -->
+    <canvas id="meteorCanvas"></canvas>
+
+    <div class="container">
+        <h2>📌 Catatan Kas & Piket Kelas</h2>
+        
+        <form id="noteForm">
+            <div class="form-group">
+                <label for="studentName">Nama Siswa:</label>
+                <input type="text" id="studentName" placeholder="Contoh: Budi" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="category">Jenis Catatan:</label>
+                <select id="category">
+                    <option value="Uang Kas">Belum Bayar Uang Kas</option>
+                    <option value="Gak Piket">Gak Piket</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="notes">Keterangan Tambahan (Opsional):</label>
+                <input type="text" id="notes" placeholder="Contoh: Tunggakan Minggu 1 / Hari Senin">
+            </div>
+            
+            <button type="submit">➕ Tambah Catatan</button>
+        </form>
+
+        <table id="dataTable">
+            <thead>
+                <tr>
+                    <th>Nama</th>
+                    <th>Kategori</th>
+                    <th>Keterangan</th>
+                    <th>Aksi</th>
+                </tr>
+            </thead>
+            <tbody id="noteList"></tbody>
+        </table>
+        
+        <p id="emptyMsg" class="empty-msg">Belum ada catatan.</p>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. LOGIKA ANIMASI METEOR FULL SCREEN
+        // ==========================================
+        const canvas = document.getElementById('meteorCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        class Meteor {
+            constructor(isInitial = false) {
+                this.reset(isInitial);
+            }
+
+            reset(isInitial = false) {
+                if (isInitial) {
+                    // Saat pertama kali dimuat, sebar meteor secara acak di seluruh layar
+                    this.x = Math.random() * canvas.width;
+                    this.y = Math.random() * canvas.height;
+                } else {
+                    // Untuk respawn: 60% dari atas layar, 40% dari sisi kiri layar
+                    if (Math.random() < 0.6) {
+                        this.x = Math.random() * (canvas.width + 200) - 100;
+                        this.y = -50;
+                    } else {
+                        this.x = -50;
+                        this.y = Math.random() * canvas.height;
+                    }
+                }
+
+                this.length = Math.random() * 80 + 40;   // Panjang ekor meteor
+                this.speed = Math.random() * 4 + 3;       // Kecepatan meluncur
+                this.opacity = Math.random() * 0.8 + 0.2; // Tingkat kecerahan
+                this.width = Math.random() * 2 + 1;       // Ketebalan garis
+            }
+
+            update() {
+                // Pergerakan miring (ke kanan bawah)
+                this.x += this.speed * 0.7;
+                this.y += this.speed;
+
+                // Reset meteor jika sudah keluar dari batas kanan atau bawah layar
+                if (this.y > canvas.height + 50 || this.x > canvas.width + 50) {
+                    this.reset(false);
+                }
+            }
+
+            draw() {
+                // Membuat gradasi warna hijau berpendar
+                const gradient = ctx.createLinearGradient(
+                    this.x, this.y, 
+                    this.x - this.length * 0.7, this.y - this.length
+                );
+                gradient.addColorStop(0, `rgba(46, 204, 113, ${this.opacity})`); // Kepala meteor
+                gradient.addColorStop(1, 'rgba(46, 204, 113, 0)');              // Ekor transparan
+
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+                ctx.lineTo(this.x - this.length * 0.7, this.y - this.length);
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = this.width;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+            }
+        }
+
+        // Membuat 50 meteor agar layar terisi penuh
+        const meteors = [];
+        const meteorCount = 90;
+
+        for (let i = 0; i < meteorCount; i++) {
+            meteors.push(new Meteor(true)); // true = posisi awal disebar
+        }
+
+        function animate() {
+            // Membersihkan canvas dengan Jejak Gelap Transparan
+            ctx.fillStyle = 'rgba(5, 11, 7, 0.25)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            meteors.forEach(meteor => {
+                meteor.update();
+                meteor.draw();
+            });
+
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+
+        // ==========================================
+        // 2. LOGIKA CATATAN KELAS (LOCALSTORAGE)
+        // ==========================================
+        const noteForm = document.getElementById('noteForm');
+        const studentNameInput = document.getElementById('studentName');
+        const categoryInput = document.getElementById('category');
+        const notesInput = document.getElementById('notes');
+        const noteList = document.getElementById('noteList');
+        const emptyMsg = document.getElementById('emptyMsg');
+
+        let notesData = JSON.parse(localStorage.getItem('catatanKelas')) || [];
+
+        function renderNotes() {
+            noteList.innerHTML = '';
+            
+            if (notesData.length === 0) {
+                emptyMsg.style.display = 'block';
+            } else {
+                emptyMsg.style.display = 'none';
+                notesData.forEach((item, index) => {
+                    const tr = document.createElement('tr');
+                    const badgeClass = item.category === 'Uang Kas' ? 'badge-kas' : 'badge-piket';
+
+                    tr.innerHTML = `
+                        <td><strong>${item.name}</strong></td>
+                        <td><span class="badge ${badgeClass}">${item.category}</span></td>
+                        <td>${item.notes || '-'}</td>
+                        <td><button class="btn-delete" onclick="deleteNote(${index})">Selesai</button></td>
+                    `;
+                    noteList.appendChild(tr);
+                });
+            }
+        }
+
+        noteForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const newNote = {
+                name: studentNameInput.value.trim(),
+                category: categoryInput.value,
+                notes: notesInput.value.trim()
+            };
+
+            notesData.push(newNote);
+            saveAndRender();
+            noteForm.reset();
+        });
+
+        function deleteNote(index) {
+            notesData.splice(index, 1);
+            saveAndRender();
+        }
+
+        function saveAndRender() {
+            localStorage.setItem('catatanKelas', JSON.stringify(notesData));
+            renderNotes();
+        }
+
+        renderNotes();
+    </script>
+</body>
+</html>
